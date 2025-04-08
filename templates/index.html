@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CanSat Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Live Telemetry</h1>
+    <canvas id="altitudeChart"></canvas>
+    <canvas id="temperatureChart"></canvas>
+
+    <h2>Live Video</h2>
+    <img src="/video" width="640" height="480"/>
+
+    <script>
+        const altitudeData = [];
+        const temperatureData = [];
+        const labels = [];
+
+        const altitudeChart = new Chart(document.getElementById('altitudeChart'), {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Altitude',
+                    data: altitudeData,
+                    borderColor: 'blue',
+                    fill: false
+                }]
+            }
+        });
+
+        const temperatureChart = new Chart(document.getElementById('temperatureChart'), {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Temperature',
+                    data: temperatureData,
+                    borderColor: 'red',
+                    fill: false
+                }]
+            }
+        });
+
+        setInterval(() => {
+            fetch('/telemetry')
+                .then(res => res.json())
+                .then(data => {
+                    const now = new Date().toLocaleTimeString();
+                    labels.push(now);
+                    altitudeData.push(data.altitude);
+                    temperatureData.push(data.temperature);
+                    if (labels.length > 20) {
+                        labels.shift();
+                        altitudeData.shift();
+                        temperatureData.shift();
+                    }
+                    altitudeChart.update();
+                    temperatureChart.update();
+                });
+        }, 1000);
+    </script>
+</body>
+</html>
