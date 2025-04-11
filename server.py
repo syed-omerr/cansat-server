@@ -1,42 +1,80 @@
-from flask import Flask, render_template, Response, request, jsonify
-from flask_cors import CORS
-import cv2
+# === Flask Ground Station Server (Render-compatible) ===
+# File: app.py
+
+from flask import Flask, request, render_template_string, send_file
+import os
+from datetime import datetime
 
 app = Flask(__name__)
-CORS(app)
 
-sensor_data = {
-    "altitude": 0,
-    "temperature": 0
-}
-
-def generate_video():
-    cap = cv2.VideoCapture(0)
-    while True:
-        success, frame = cap.read()
-        if not success:
-            break
-        _, buffer = cv2.imencode('.jpg', frame)
-        frame = buffer.tobytes()
-        yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+# Store latest telemetry and image
+telemetry_data = {}
+image_path = "last_frame.jpg"
+deploy_triggered = False
 
 @app.route('/')
-def index():
-    return render_template('index.html')
+def dashboard():
+    return render_template_string('''
+        <html>
+        <head><title>CanSat Dashboard</title></head>
+        <body>
+            <h1>Live CanSat Telemetry</h1>
+            {% if telemetry %}
+            <ul>
+            {% for key, value in telemetry.items() %}
+                <li><b>{{ key }}:</b> {{ value }}</li>
+            {% endfor %}
+            </ul>
+            {% else %}
+                <p>No telemetry received yet.</p>
+            {% endif %}
+            <h2>Live Camera Frame</h2>
+            <img src="/frame" width="480" height="360">
 
-@app.route('/video')
-def video():
-    return Response(generate_video(), mimetype='multipart/x-mixed-replace; boundary=frame')
+            <h2>Parachute Control</h2>
+            <form action="/deploy" method="post">
+                <button type="submit">DEPLOY PARACHUTE</button>
+            </form>
+        </body>
+        </html>
+    ''', telemetry=telemetry_data)
 
-@app.route('/data', methods=['POST'])
-def data():
-    global sensor_data
-    sensor_data = request.json
-    return jsonify({"status": "received"})
+@app.route('/telemetry', methods=['POST'])
+def receive_telemetry():
+    global telemetry_data
+    telemetry_data = request.json
+    telemetry_data['timestamp'] = datetime.utcnow().isoformat()
+    print("Telemetry received:", telemetry_data)
+    return 'OK'
 
-@app.route('/telemetry')
-def telemetry():
-    return jsonify(sensor_data)
+@app.route('/frame', methods=['POST'])
+def receive_frame():
+    file = request.files['image']
+    file.save(image_path)
+    print("Frame received")
+    return 'OK'
+
+@app.route('/frame')
+def get_frame():
+    if os.path.exists(image_path):
+        return send_file(image_path, mimetype='image/jpeg')
+    else:
+        return "No frame yet", 404
+
+@app.route('/deploy', methods=['POST'])
+def deploy():
+    global deploy_triggered
+    deploy_triggered = True
+    print("Parachute deployment triggered from UI!")
+    return 'DEPLOY command sent!'
+
+@app.route('/deploy')
+def check_deploy():
+    global deploy_triggered
+    if deploy_triggered:
+        deploy_triggered = False
+        return 'DEPLOY'
+    return 'NO'
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(debug=True)
