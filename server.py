@@ -1,5 +1,3 @@
-# === Flask Ground Station Server (Render-compatible) ===
-# File: app.py
 
 from flask import Flask, request, render_template_string, send_file
 import os
@@ -7,7 +5,7 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-# Store latest telemetry and image
+
 telemetry_data = {}
 image_path = "last_frame.jpg"
 deploy_triggered = False
